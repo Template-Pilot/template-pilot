@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Papa from "papaparse";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -147,6 +147,7 @@ export function SendCampaignForm({
   const [selectedRecipient, setSelectedRecipient] = useState("");
   const [selectedContactBookId, setSelectedContactBookId] = useState("");
   const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
+  const hydrationPending = useRef(false);
 
   const form = useForm<CampaignInput>({
     resolver: zodResolver(campaignSchema),
@@ -176,56 +177,61 @@ export function SendCampaignForm({
       return;
     }
 
-    try {
-      const raw = window.sessionStorage.getItem(SEND_FORM_STORAGE_KEY);
-      if (!raw) {
-        setHydratedFromStorage(true);
-        return;
-      }
+    hydrationPending.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const raw = window.sessionStorage.getItem(SEND_FORM_STORAGE_KEY);
+        if (!raw) {
+          setHydratedFromStorage(true);
+          return;
+        }
 
-      const parsed = JSON.parse(raw) as {
-        recipients?: unknown;
-        templateName?: unknown;
-        templateData?: unknown;
-      };
+        const parsed = JSON.parse(raw) as {
+          recipients?: unknown;
+          templateName?: unknown;
+          templateData?: unknown;
+        };
 
-      const storedRecipients = Array.isArray(parsed.recipients)
-        ? parsed.recipients
-            .map((value) => String(value).trim().toLowerCase())
-            .filter((value) => isValidContactEmail(value))
-        : [];
+        const storedRecipients = Array.isArray(parsed.recipients)
+          ? parsed.recipients
+              .map((value) => String(value).trim().toLowerCase())
+              .filter((value) => isValidContactEmail(value))
+          : [];
 
-      const storedTemplateName = String(parsed.templateName ?? "");
-      const templateExists = templates.some((template) => template.name === storedTemplateName);
-      const safeTemplateName = templateExists
-        ? storedTemplateName
-        : templates[0]?.name ?? "";
+        const storedTemplateName = String(parsed.templateName ?? "");
+        const templateExists = templates.some((template) => template.name === storedTemplateName);
+        const safeTemplateName = templateExists
+          ? storedTemplateName
+          : templates[0]?.name ?? "";
 
-      const storedTemplateData =
-        typeof parsed.templateData === "string" ? parsed.templateData : "{}";
-      const storedContactBookId =
-        typeof (parsed as { selectedContactBookId?: unknown }).selectedContactBookId === "string"
-          ? String((parsed as { selectedContactBookId?: unknown }).selectedContactBookId)
+        const storedTemplateData =
+          typeof parsed.templateData === "string" ? parsed.templateData : "{}";
+        const storedContactBookId =
+          typeof (parsed as { selectedContactBookId?: unknown }).selectedContactBookId === "string"
+            ? String((parsed as { selectedContactBookId?: unknown }).selectedContactBookId)
+            : "";
+        const safeContactBookId = contactBooks.some((book) => book.id === storedContactBookId)
+          ? storedContactBookId
           : "";
-      const safeContactBookId = contactBooks.some((book) => book.id === storedContactBookId)
-        ? storedContactBookId
-        : "";
 
-      form.reset({
-        recipients: storedRecipients,
-        templateName: safeTemplateName,
-        templateData: storedTemplateData
-      });
-      setSelectedContactBookId(safeContactBookId);
-    } catch {
-      // Ignore malformed storage and use defaults.
-    } finally {
-      setHydratedFromStorage(true);
-    }
+        form.reset({
+          recipients: storedRecipients,
+          templateName: safeTemplateName,
+          templateData: storedTemplateData
+        });
+        setSelectedContactBookId(safeContactBookId);
+      } catch {
+        // Ignore malformed storage and use defaults.
+      } finally {
+        hydrationPending.current = false;
+        setHydratedFromStorage(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [contactBooks, form, templates]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !hydratedFromStorage) {
+    if (typeof window === "undefined" || !hydratedFromStorage || hydrationPending.current) {
       return;
     }
 

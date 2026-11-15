@@ -183,14 +183,16 @@ function BrandColorField({ label, value, onChange }: BrandColorFieldProps) {
   const normalized = normalizeHex(value) ?? "#64748b";
   const [open, setOpen] = useState(false);
   const [hexInput, setHexInput] = useState(normalized);
+  const [previousNormalized, setPreviousNormalized] = useState(normalized);
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [popoverStyle, setPopoverStyle] = useState<{ left: number; top: number } | null>(null);
   const [h, s, l] = hexToHsl(normalized);
 
-  useEffect(() => {
+  if (previousNormalized !== normalized) {
+    setPreviousNormalized(normalized);
     setHexInput(normalized);
-  }, [normalized]);
+  }
 
   useEffect(() => {
     if (!open) {

@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 
 type SmtpConfig = {
   host: string;
@@ -9,7 +9,7 @@ type SmtpConfig = {
   fromEmail: string | null;
 };
 
-let cachedTransporter: nodemailer.Transporter | null = null;
+let cachedTransporter: Transporter | null = null;
 let cachedKey: string | null = null;
 
 function parsePort(value: string | undefined, fallback: number) {
